@@ -82,6 +82,7 @@ public class CSharpServiceProxyGenerator : ServiceProxyGeneratorBase<CSharpServi
         "using System;",
         "using System.Collections.Generic;",
         "using System.Threading.Tasks;",
+        "using Volo.Abp;",
         "using Volo.Abp.Application.Dtos;",
         "using Volo.Abp.Http.Client;",
         "using Volo.Abp.Http.Modeling;",
@@ -94,6 +95,7 @@ public class CSharpServiceProxyGenerator : ServiceProxyGeneratorBase<CSharpServi
         "using System;",
         "using System.Collections.Generic;",
         "using System.Threading.Tasks;",
+        "using Volo.Abp;",
         "using Volo.Abp.Application.Dtos;",
         "using Volo.Abp.Application.Services;"
     };
@@ -102,6 +104,7 @@ public class CSharpServiceProxyGenerator : ServiceProxyGeneratorBase<CSharpServi
     {
         "using System;",
         "using System.Collections.Generic;",
+        "using Volo.Abp;",
         "using Volo.Abp.Application.Dtos;",
         "using Volo.Abp.ObjectExtending;",
     };
@@ -534,6 +537,17 @@ public class CSharpServiceProxyGenerator : ServiceProxyGeneratorBase<CSharpServi
         {
             usingNamespaceList?.AddIfNotContains($"using {GetTypeNamespace(typeName)};");
             return NormalizeTypeName(typeName.Split(".").Last());
+        }
+
+        if (typeName.Contains("<") && typeName.Contains(">"))
+        {
+            var left = typeName.IndexOf("<", StringComparison.Ordinal);
+            var right = typeName.LastIndexOf(">", StringComparison.Ordinal);
+            var genericTypes = typeName.Substring(left + 1, right - left - 1);
+            foreach (var genericType in genericTypes.Split(",").Where(x => x.Contains(".")))
+            {
+                usingNamespaceList?.AddIfNotContains($"using {GetTypeNamespace(genericType)};");
+            }
         }
 
         var type = new StringBuilder();

@@ -54,7 +54,7 @@ public class IdentityModelAuthenticationService : IIdentityModelAuthenticationSe
 
     public async Task<bool> TryAuthenticateAsync(
         [NotNull] HttpClient client,
-        string identityClientName = null)
+        string? identityClientName = null)
     {
         var accessToken = await GetAccessTokenOrNullAsync(identityClientName);
         if (accessToken == null)
@@ -66,7 +66,7 @@ public class IdentityModelAuthenticationService : IIdentityModelAuthenticationSe
         return true;
     }
 
-    protected virtual async Task<string> GetAccessTokenOrNullAsync(string identityClientName)
+    protected virtual async Task<string?> GetAccessTokenOrNullAsync(string? identityClientName)
     {
         var configuration = ClientOptions.GetClientConfiguration(CurrentTenant, identityClientName);
         if (configuration == null)
@@ -245,8 +245,9 @@ public class IdentityModelAuthenticationService : IIdentityModelAuthenticationSe
             throw new AbpException(response.ErrorDescription);
         }
 
-        Logger.LogInformation($"First copy your one-time code: {response.UserCode}");
-        Logger.LogInformation($"Open {response.VerificationUri} in your browser...");
+        Logger.LogInformation($"Open your browser, go to: \"{response.VerificationUri}\"");
+        Logger.LogInformation($"and enter the following one-time code:");
+        Logger.LogInformation(response.UserCode);
 
         for (var i = 0; i < ((response.ExpiresIn ?? 300) / response.Interval + 1); i++)
         {

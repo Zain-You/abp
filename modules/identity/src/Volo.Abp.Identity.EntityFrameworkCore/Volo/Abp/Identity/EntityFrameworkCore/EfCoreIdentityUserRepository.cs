@@ -252,10 +252,10 @@ public class EfCoreIdentityUserRepository : EfCoreRepository<IIdentityDbContext,
             .WhereIf(!string.IsNullOrWhiteSpace(emailAddress), x => x.Email == emailAddress)
             .WhereIf(!string.IsNullOrWhiteSpace(name), x => x.Name == name)
             .WhereIf(!string.IsNullOrWhiteSpace(surname), x => x.Surname == surname)
-            .WhereIf(isLockedOut.HasValue, x => x.LockoutEnabled && x.LockoutEnd.Value.CompareTo(DateTime.UtcNow) > 0)
-            .WhereIf(notActive.HasValue, x => !x.IsActive)
-            .WhereIf(emailConfirmed.HasValue, x => x.EmailConfirmed)
-            .WhereIf(isExternal.HasValue, x => x.IsExternal)
+            .WhereIf(isLockedOut.HasValue, x => (x.LockoutEnabled && x.LockoutEnd.HasValue && x.LockoutEnd.Value.CompareTo(DateTime.UtcNow) > 0) == isLockedOut.Value)
+            .WhereIf(notActive.HasValue, x => x.IsActive == !notActive.Value)
+            .WhereIf(emailConfirmed.HasValue, x => x.EmailConfirmed == emailConfirmed.Value)
+            .WhereIf(isExternal.HasValue, x => x.IsExternal == isExternal.Value)
             .WhereIf(maxCreationTime != null, p => p.CreationTime <= maxCreationTime)
             .WhereIf(minCreationTime != null, p => p.CreationTime >= minCreationTime)
             .WhereIf(maxModifitionTime != null, p => p.LastModificationTime <= maxModifitionTime)
@@ -355,5 +355,33 @@ public class EfCoreIdentityUserRepository : EfCoreRepository<IIdentityDbContext,
             .IncludeDetails(includeDetails)
             .Where(x => ids.Contains(x.Id))
             .ToListAsync(GetCancellationToken(cancellationToken));
+    }
+
+    public virtual async Task UpdateRoleAsync(Guid sourceRoleId, Guid? targetRoleId, CancellationToken cancellationToken = default)
+    {
+        if (targetRoleId != null)
+        {
+            var users = await (await GetDbContextAsync()).Set<IdentityUserRole>().Where(x => x.RoleId == targetRoleId).Select(x => x.UserId).ToArrayAsync(cancellationToken: cancellationToken);
+            await (await GetDbContextAsync()).Set<IdentityUserRole>().Where(x => x.RoleId == sourceRoleId && !users.Contains(x.UserId)).ExecuteUpdateAsync(t => t.SetProperty(e => e.RoleId, targetRoleId), GetCancellationToken(cancellationToken));
+            await (await GetDbContextAsync()).Set<IdentityUserRole>().Where(x => x.RoleId == sourceRoleId).ExecuteDeleteAsync(GetCancellationToken(cancellationToken));
+        }
+        else
+        {
+            await (await GetDbContextAsync()).Set<IdentityUserRole>().Where(x => x.RoleId == sourceRoleId).ExecuteDeleteAsync(GetCancellationToken(cancellationToken));
+        }
+    }
+
+    public virtual async Task UpdateOrganizationAsync(Guid sourceOrganizationId, Guid? targetOrganizationId, CancellationToken cancellationToken = default)
+    {
+        if (targetOrganizationId != null)
+        {
+            var users = await (await GetDbContextAsync()).Set<IdentityUserOrganizationUnit>().Where(x => x.OrganizationUnitId == targetOrganizationId).Select(x => x.UserId).ToArrayAsync(cancellationToken: cancellationToken);
+            await (await GetDbContextAsync()).Set<IdentityUserOrganizationUnit>().Where(x => x.OrganizationUnitId == sourceOrganizationId && !users.Contains(x.UserId)).ExecuteUpdateAsync(t => t.SetProperty(e => e.OrganizationUnitId, targetOrganizationId), GetCancellationToken(cancellationToken));
+            await (await GetDbContextAsync()).Set<IdentityUserOrganizationUnit>().Where(x => x.OrganizationUnitId == sourceOrganizationId).ExecuteDeleteAsync(GetCancellationToken(cancellationToken));
+        }
+        else
+        {
+            await (await GetDbContextAsync()).Set<IdentityUserOrganizationUnit>().Where(x => x.OrganizationUnitId == sourceOrganizationId).ExecuteDeleteAsync(GetCancellationToken(cancellationToken));
+        }
     }
 }
