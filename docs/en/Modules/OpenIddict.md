@@ -215,6 +215,10 @@ This module implements OpenIddict stores:
 - `IOpenIddictScopeStore`
 - `IOpenIddictTokenStore`
 
+#### AbpOpenIddictStoreOptions
+
+You can configure the `PruneIsolationLevel/DeleteIsolationLevel` of `AbpOpenIddictStoreOptions` to set the isolation level for the store operations becasue different databases have different isolation levels.
+
 ##### Repositories
 
 The following custom repositories are defined in this module:
@@ -349,7 +353,7 @@ public class MyClaimDestinationsHandler : IAbpOpenIddictClaimsPrincipalHandler, 
     }
 }
 
-Configure<AbpOpenIddictClaimDestinationsOptions>(options =>
+Configure<AbpOpenIddictClaimsPrincipalOptions>(options =>
 {
     options.ClaimsPrincipalHandlers.Add<MyClaimDestinationsHandler>();
 });

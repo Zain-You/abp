@@ -27,7 +27,9 @@ public abstract class AbpWebApplicationFactoryIntegratedTest<TProgram> : WebAppl
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
-        builder.ConfigureServices(ConfigureServices);
+        builder
+            .AddAppSettingsSecretsJson()
+            .ConfigureServices(ConfigureServices);
         return base.CreateHost(builder);
     }
 
@@ -39,6 +41,16 @@ public abstract class AbpWebApplicationFactoryIntegratedTest<TProgram> : WebAppl
     protected virtual T GetRequiredService<T>() where T : notnull
     {
         return Services.GetRequiredService<T>();
+    }
+
+    protected virtual T? GetKeyedServices<T>(object? serviceKey)
+    {
+        return ServiceProvider.GetKeyedService<T>(serviceKey);
+    }
+
+    protected virtual T GetRequiredKeyedService<T>(object? serviceKey) where T : notnull
+    {
+        return ServiceProvider.GetRequiredKeyedService<T>(serviceKey);
     }
 
     protected virtual void ConfigureServices(IServiceCollection services)

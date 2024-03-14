@@ -4,7 +4,10 @@ using System.Linq;
 using System.Net.Mail;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Volo.Abp.BackgroundJobs;
+using Volo.Abp.Validation;
 
 namespace Volo.Abp.Emailing;
 
@@ -13,6 +16,8 @@ namespace Volo.Abp.Emailing;
 /// </summary>
 public abstract class EmailSenderBase : IEmailSender
 {
+    public ILogger<EmailSenderBase> Logger { get; set; }
+
     protected IEmailSenderConfiguration Configuration { get; }
 
     protected IBackgroundJobManager BackgroundJobManager { get; }
@@ -22,6 +27,8 @@ public abstract class EmailSenderBase : IEmailSender
     /// </summary>
     protected EmailSenderBase(IEmailSenderConfiguration configuration, IBackgroundJobManager backgroundJobManager)
     {
+        Logger = NullLogger<EmailSenderBase>.Instance;
+
         Configuration = configuration;
         BackgroundJobManager = backgroundJobManager;
     }
@@ -78,6 +85,8 @@ public abstract class EmailSenderBase : IEmailSender
 
     public virtual async Task QueueAsync(string to, string subject, string body, bool isBodyHtml = true, AdditionalEmailSendingArgs? additionalEmailSendingArgs = null)
     {
+        ValidateEmailAddress(to);
+
         if (!BackgroundJobManager.IsAvailable())
         {
             await SendAsync(to, subject, body, isBodyHtml, additionalEmailSendingArgs);
@@ -98,6 +107,8 @@ public abstract class EmailSenderBase : IEmailSender
 
     public virtual async Task QueueAsync(string from, string to, string subject, string body, bool isBodyHtml = true, AdditionalEmailSendingArgs? additionalEmailSendingArgs = null)
     {
+        ValidateEmailAddress(to);
+
         if (!BackgroundJobManager.IsAvailable())
         {
             await SendAsync(from, to, subject, body, isBodyHtml, additionalEmailSendingArgs);
@@ -154,5 +165,15 @@ public abstract class EmailSenderBase : IEmailSender
         {
             mail.BodyEncoding = Encoding.UTF8;
         }
+    }
+
+    private static void ValidateEmailAddress(string emailAddress)
+    {
+        if(ValidationHelper.IsValidEmailAddress(emailAddress))
+        {
+            return;
+        }
+
+        throw new ArgumentException($"Email address '{emailAddress}' is not valid!");
     }
 }

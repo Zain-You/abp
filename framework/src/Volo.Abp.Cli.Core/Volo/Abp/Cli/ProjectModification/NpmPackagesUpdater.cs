@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -11,8 +10,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.Versioning;
-using Volo.Abp.Cli.Args;
-using Volo.Abp.Cli.Commands;
 using Volo.Abp.Cli.Http;
 using Volo.Abp.Cli.LIbs;
 using Volo.Abp.Cli.Utils;
@@ -53,7 +50,7 @@ public class NpmPackagesUpdater : ITransientDependency
 
     public async Task Update(string rootDirectory, bool includePreviews = false,
         bool includeReleaseCandidates = false,
-        bool switchToStable = false, string version = null)
+        bool switchToStable = false, string version = null, bool includePreRc = false)
     {
         var fileList = _packageJsonFileFinder.Find(rootDirectory);
 
@@ -64,13 +61,27 @@ public class NpmPackagesUpdater : ITransientDependency
 
         _npmGlobalPackagesChecker.Check();
 
+        foreach (var file in fileList)
+        {
+            if (includePreviews || includePreRc)
+            {
+                await CreateNpmrcFileAsync(Path.GetDirectoryName(file));
+            }
+            else if (switchToStable)
+            {
+                await DeleteNpmrcFileAsync(Path.GetDirectoryName(file));
+            }
+        }
+
         var packagesUpdated = new ConcurrentDictionary<string, bool>();
 
         async Task UpdateAsync(string file)
         {
             var updated = await UpdatePackagesInFile(file, includePreviews, includeReleaseCandidates,
                 switchToStable,
-                version);
+                version,
+                includePreRc);
+
             packagesUpdated.TryAdd(file, updated);
         }
 
@@ -80,23 +91,7 @@ public class NpmPackagesUpdater : ITransientDependency
         {
             var fileDirectory = Path.GetDirectoryName(file.Key).EnsureEndsWith(Path.DirectorySeparatorChar);
 
-            if (includePreviews)
-            {
-                await CreateNpmrcFileAsync(Path.GetDirectoryName(file.Key));
-            }
-            else if (switchToStable)
-            {
-                await DeleteNpmrcFileAsync(Path.GetDirectoryName(file.Key));
-            }
-
-            if (await NpmrcFileExistAsync(fileDirectory))
-            {
-                RunNpmInstall(fileDirectory);
-            }
-            else
-            {
-                RunYarn(fileDirectory);
-            }
+            RunYarn(fileDirectory);
 
             if (!IsAngularProject(fileDirectory))
             {
@@ -123,6 +118,7 @@ public class NpmPackagesUpdater : ITransientDependency
         var fileName = Path.Combine(directoryName, ".npmrc");
         var abpRegistry = "@abp:registry=https://www.myget.org/F/abp-nightly/npm";
         var voloRegistry = "@volo:registry=https://www.myget.org/F/abp-commercial-npm-nightly/npm";
+        var volosoftRegistry = "@volosoft:registry=https://www.myget.org/F/abp-commercial-npm-nightly/npm";
 
         if (await NpmrcFileExistAsync(directoryName))
         {
@@ -133,9 +129,14 @@ public class NpmPackagesUpdater : ITransientDependency
                 fileContent += Environment.NewLine + abpRegistry;
             }
 
-            if(!fileContent.Contains(voloRegistry))
+            if (!fileContent.Contains(voloRegistry))
             {
                 fileContent += Environment.NewLine + voloRegistry;
+            }
+
+            if (!fileContent.Contains(volosoftRegistry))
+            {
+                fileContent += volosoftRegistry;
             }
 
             File.WriteAllText(fileName, fileContent);
@@ -147,6 +148,7 @@ public class NpmPackagesUpdater : ITransientDependency
 
         sw.WriteLine(abpRegistry);
         sw.WriteLine(voloRegistry);
+        sw.WriteLine(volosoftRegistry);
     }
 
     private static bool IsAngularProject(string fileDirectory)
@@ -159,7 +161,8 @@ public class NpmPackagesUpdater : ITransientDependency
         bool includePreviews = false,
         bool includeReleaseCandidates = false,
         bool switchToStable = false,
-        string specifiedVersion = null)
+        string specifiedVersion = null,
+        bool includePreRc = false)
     {
         var packagesUpdated = false;
         var fileContent = File.ReadAllText(filePath);
@@ -174,7 +177,7 @@ public class NpmPackagesUpdater : ITransientDependency
         foreach (var abpPackage in abpPackages)
         {
             var updated = await TryUpdatingPackage(filePath, abpPackage, includePreviews, includeReleaseCandidates,
-                switchToStable, specifiedVersion);
+                switchToStable, specifiedVersion, includePreRc);
 
             if (updated)
             {
@@ -195,7 +198,8 @@ public class NpmPackagesUpdater : ITransientDependency
         bool includePreviews = false,
         bool includeReleaseCandidates = false,
         bool switchToStable = false,
-        string specifiedVersion = null)
+        string specifiedVersion = null,
+        bool includePreRc = false)
     {
         var currentVersion = (string)package.Value;
 
@@ -218,7 +222,11 @@ public class NpmPackagesUpdater : ITransientDependency
         }
         else
         {
-            if ((includePreviews ||
+            if (includePreRc && !includeReleaseCandidates)
+            {
+                version = await GetLatestVersion(package, includePreRc: true, workingDirectory: filePath.RemovePostFix("package.json"));
+            }
+            else if ((includePreviews ||
                  (!switchToStable && (currentVersion != null && currentVersion.Contains("-preview")))) &&
                 !includeReleaseCandidates)
             {
@@ -259,9 +267,10 @@ public class NpmPackagesUpdater : ITransientDependency
         return version.Split("-", StringSplitOptions.RemoveEmptyEntries).Length > 1;
     }
 
-    protected virtual async Task<string> GetLatestVersion(JProperty package, bool includeReleaseCandidates = false, bool includePreviews = false, string workingDirectory = null)
+    protected virtual async Task<string> GetLatestVersion(JProperty package, bool includeReleaseCandidates = false, bool includePreviews = false, string workingDirectory = null, bool includePreRc = false)
     {
-        var key = package.Name + (includePreviews ? "(preview)" : string.Empty);
+        var postfix = includePreviews || includePreRc ? "(preview)" : string.Empty;
+        var key = package.Name + postfix;
 
         if (_fileVersionStorage.ContainsKey(key))
         {
@@ -272,7 +281,12 @@ public class NpmPackagesUpdater : ITransientDependency
 
         string newVersion = string.Empty;
 
-        if (includePreviews)
+        if (includePreRc)
+        {
+            var filterKey = $"-preview{DateTime.Now.ToString("yyyyMMdd")}";
+            newVersion = versionList.Where(f => f.Contains(filterKey)).OrderBy(o => o).FirstOrDefault();
+        }
+        else if (includePreviews)
         {
             newVersion = versionList.FirstOrDefault(v => v.Contains("-preview"));
         }
@@ -313,8 +327,12 @@ public class NpmPackagesUpdater : ITransientDependency
             var properties = dependencies.Properties().ToList();
 
             abpPackages
-                .AddRange(properties.Where(p => p.Name.StartsWith("@abp/") || p.Name.StartsWith("@volo/"))
-                    .ToList());
+                .AddRange(
+                properties.Where(
+                      p => p.Name.StartsWith("@abp/")
+                        || p.Name.StartsWith("@volo/")
+                        || p.Name.StartsWith("@volosoft/")).ToList()
+                );
         }
 
         return abpPackages;

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Volo.Abp.AspNetCore.Middleware;
 using Volo.Abp.Auditing;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Uow;
@@ -11,7 +12,7 @@ using Volo.Abp.Users;
 
 namespace Volo.Abp.AspNetCore.Auditing;
 
-public class AbpAuditingMiddleware : IMiddleware, ITransientDependency
+public class AbpAuditingMiddleware : AbpMiddlewareBase, ITransientDependency
 {
     private readonly IAuditingManager _auditingManager;
     protected AbpAuditingOptions AuditingOptions { get; }
@@ -34,9 +35,9 @@ public class AbpAuditingMiddleware : IMiddleware, ITransientDependency
         AspNetCoreAuditingOptions = aspNetCoreAuditingOptions.Value;
     }
 
-    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    public async override Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        if (!AuditingOptions.IsEnabled || IsIgnoredUrl(context))
+        if (await ShouldSkipAsync(context, next) || !AuditingOptions.IsEnabled || IsIgnoredUrl(context))
         {
             await next(context);
             return;
@@ -100,12 +101,12 @@ public class AbpAuditingMiddleware : IMiddleware, ITransientDependency
         }
 
         if (!AuditingOptions.IsEnabledForIntegrationServices &&
-            context.Request.Path.Value.StartsWith($"/{AbpAspNetCoreConsts.DefaultIntegrationServiceApiPrefix}/"))
+            context.Request.Path.Value.StartsWith($"/{AbpAspNetCoreConsts.DefaultIntegrationServiceApiPrefix}/", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        if (AspNetCoreAuditingOptions.IgnoredUrls.Any(x => context.Request.Path.Value.StartsWith(x)))
+        if (AspNetCoreAuditingOptions.IgnoredUrls.Any(x => context.Request.Path.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

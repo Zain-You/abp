@@ -36,6 +36,13 @@ using Volo.CmsKit.Reactions;
 using Volo.CmsKit.Tags;
 using Volo.CmsKit.Web;
 using Volo.CmsKit.Web.Contents;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Mvc.Routing;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Volo.Abp.DependencyInjection;
+using Volo.CmsKit.Public.Pages;
+
 
 #if EntityFrameworkCore
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
@@ -54,7 +61,6 @@ using Volo.Abp.TenantManagement.MongoDB;
 using Volo.Abp.Identity.MongoDB;
 using Volo.Abp.PermissionManagement.MongoDB;
 using Volo.Abp.FeatureManagement.MongoDB;
-using Volo.Abp.MongoDB;
 using Volo.Abp.BlobStoring.Database.MongoDB;
 using Volo.Abp.AuditLogging.MongoDB;
 using Volo.CmsKit.MongoDB;
@@ -161,9 +167,9 @@ public class CmsKitWebUnifiedModule : AbpModule
             options.Languages.Add(new LanguageInfo("hu", "hu", "Magyar"));
             options.Languages.Add(new LanguageInfo("fi", "fi", "Finnish"));
             options.Languages.Add(new LanguageInfo("fr", "fr", "Français"));
-            options.Languages.Add(new LanguageInfo("hi", "hi", "Hindi", "in"));
-            options.Languages.Add(new LanguageInfo("is", "is", "Icelandic", "is"));
-            options.Languages.Add(new LanguageInfo("it", "it", "Italiano", "it"));
+            options.Languages.Add(new LanguageInfo("hi", "hi", "Hindi"));
+            options.Languages.Add(new LanguageInfo("is", "is", "Icelandic"));
+            options.Languages.Add(new LanguageInfo("it", "it", "Italiano"));
             options.Languages.Add(new LanguageInfo("pt-BR", "pt-BR", "Português (Brasil)"));
             options.Languages.Add(new LanguageInfo("ro-RO", "ro-RO", "Română"));
             options.Languages.Add(new LanguageInfo("ru", "ru", "Русский"));
@@ -266,6 +272,7 @@ public class CmsKitWebUnifiedModule : AbpModule
 
         app.UseAuditing();
         app.UseAbpSerilogEnrichers();
+
         app.UseConfiguredEndpoints();
 
         using (var scope = context.ServiceProvider.CreateScope())

@@ -1,12 +1,12 @@
 # Dependency Injection
 
-ABP's Dependency Injection system is developed based on Microsoft's [dependency injection extension](https://medium.com/volosoft/asp-net-core-dependency-injection-best-practices-tips-tricks-c6e9c67f9d96) library (Microsoft.Extensions.DependencyInjection nuget package). So, it's documentation is valid in ABP too.
+ABP's Dependency Injection system is developed based on Microsoft's [dependency injection extension](https://medium.com/volosoft/asp-net-core-dependency-injection-best-practices-tips-tricks-c6e9c67f9d96) library (Microsoft.Extensions.DependencyInjection nuget package). So, its documentation is valid in ABP too.
 
 > While ABP has no core dependency to any 3rd-party DI provider. However, it's required to use a provider that supports dynamic proxying and some other advanced features to make some ABP features properly work. Startup templates come with [Autofac](https://autofac.org/) installed. See [Autofac integration](Autofac-Integration.md) document for more information.
 
 ## Modularity
 
-Since ABP is a modular framework, every module defines it's own services and registers via dependency injection in it's own separate [module class](Module-Development-Basics.md). Example:
+Since ABP is a modular framework, every module defines its own services and registers via dependency injection in its own separate [module class](Module-Development-Basics.md). Example:
 
 ````C#
 public class BlogModule : AbpModule
@@ -143,6 +143,50 @@ public class TaxCalculator : ITaxCalculator, ITransientDependency
 }
 ````
 
+### ExposeKeyedService Attribute 
+
+`ExposeKeyedServiceAttribute` is used to control which keyed services are provided by the related class. Example:
+
+````C#
+[ExposeKeyedService<ITaxCalculator>("taxCalculator")]
+[ExposeKeyedService<ICalculator>("calculator")]
+public class TaxCalculator: ICalculator, ITaxCalculator, ICanCalculate, ITransientDependency
+{
+}
+````
+
+In the example above, the `TaxCalculator` class exposes the `ITaxCalculator` interface with the key `taxCalculator` and the `ICalculator` interface with the key `calculator`. That means you can get keyed services from the `IServiceProvider` as shown below:
+
+````C#
+var taxCalculator = ServiceProvider.GetRequiredKeyedService<ITaxCalculator>("taxCalculator");
+var calculator = ServiceProvider.GetRequiredKeyedService<ICalculator>("calculator");
+````
+
+Also, you can use the [`FromKeyedServicesAttribute`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.dependencyinjection.fromkeyedservicesattribute?view=dotnet-plat-ext-8.0) to resolve a certain keyed service in the constructor:
+
+```csharp
+public class MyClass
+{
+    //...
+
+    public MyClass([FromKeyedServices("taxCalculator")] ITaxCalculator taxCalculator)
+    {
+        TaxCalculator = taxCalculator;
+    }
+}
+```
+
+> Notice that the `ExposeKeyedServiceAttribute` only exposes the keyed services. So, you can not inject the `ITaxCalculator` or `ICalculator` interfaces in your application without using the `FromKeyedServicesAttribute` as shown in the example above. If you want to expose both keyed and non-keyed services, you can use the `ExposeServicesAttribute` and `ExposeKeyedServiceAttribute` attributes together as shown below:
+
+````C#
+[ExposeKeyedService<ITaxCalculator>("taxCalculator")]
+[ExposeKeyedService<ICalculator>("calculator")]
+[ExposeServices(typeof(ITaxCalculator), typeof(ICalculator))]
+public class TaxCalculator: ICalculator, ITaxCalculator, ICanCalculate, ITransientDependency
+{
+}
+````
+
 ### Manually Registering
 
 In some cases, you may need to register a service to the `IServiceCollection` manually, especially if you need to use custom factory methods or singleton instances. In that case, you can directly add services just as [Microsoft documentation](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection) describes. Example:
@@ -210,7 +254,7 @@ public class TaxAppService : ApplicationService
 }
 ````
 
-``TaxAppService`` gets ``ITaxCalculator`` in it's constructor. The dependency injection system automatically provides the requested service at runtime.
+``TaxAppService`` gets ``ITaxCalculator`` in its constructor. The dependency injection system automatically provides the requested service at runtime.
 
 Constructor injection is preffered way of injecting dependencies to a class. In that way, the class can not be constructed unless all constructor-injected dependencies are provided. Thus, the class explicitly declares it's required services.
 
@@ -267,6 +311,21 @@ public class MyService : ITransientDependency
     [DisablePropertyInjection]
     public ITaxCalculator TaxCalculator { get; set; }
 }
+````
+
+#### IInjectPropertiesService
+
+You can use the `IInjectPropertiesService` service to inject properties of an object. Generally, it is a service outside of DI, such as manually created services.
+
+````C#
+var injectPropertiesService = serviceProvider.GetRequiredService<IInjectPropertiesService>();
+var instance = new TestService();
+
+// Set any properties on instance that can be resolved by IServiceProvider.
+injectPropertiesService.InjectProperties(instance);
+
+// Set any null-valued properties on instance that can be resolved by the IServiceProvider.
+injectPropertiesService.InjectUnsetProperties(instance);
 ````
 
 ### Resolve Service from IServiceProvider
@@ -480,6 +539,24 @@ This example simply checks if the service class has `MyLogAttribute` attribute a
 
 > Notice that `OnRegistered` callback might be called multiple times for the same service class if it exposes more than one service/interface. So, it's safe to use `Interceptors.TryAdd` method instead of `Interceptors.Add` method. See [the documentation](Dynamic-Proxying-Interceptors.md) of dynamic proxying / interceptors.
 
+### IServiceCollection.OnActivated Event
+
+The `OnActivated` event is raised once a service is fully constructed. Here you can perform application-level tasks that depend on the service being fully constructed - these should be rare.
+
+````csharp
+var serviceDescriptor = ServiceDescriptor.Transient<MyServer, MyServer>();
+services.Add(serviceDescriptor);
+if (setIsReadOnly)
+{
+    services.OnActivated(serviceDescriptor, x =>
+    {
+        x.Instance.As<MyServer>().IsReadOnly = true;
+    });
+}
+````
+
+> Notice that `OnActivated` event can be registered multiple times for the same `ServiceDescriptor`.
+
 ## 3rd-Party Providers
 
 While ABP has no core dependency to any 3rd-party DI provider, it's required to use a provider that supports dynamic proxying and some other advanced features to make some ABP features properly work. 
@@ -489,3 +566,4 @@ Startup templates come with Autofac installed. See [Autofac integration](Autofac
 ## See Also
 
 * [ASP.NET Core Dependency Injection Best Practices, Tips & Tricks](https://medium.com/volosoft/asp-net-core-dependency-injection-best-practices-tips-tricks-c6e9c67f9d96)
+* [Video tutorial](https://abp.io/video-courses/essentials/dependency-injection)
